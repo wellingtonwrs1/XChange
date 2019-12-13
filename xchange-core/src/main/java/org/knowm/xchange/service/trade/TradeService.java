@@ -103,7 +103,7 @@ public interface TradeService extends BaseService {
   }
 
   default String placeMarketOrder(MarketOrder marketOrder, String apiKey, String secretKey)
-          throws IOException {
+      throws IOException {
     throw new NotYetImplementedForExchangeException();
   }
 
@@ -255,6 +255,11 @@ public interface TradeService extends BaseService {
    */
   default UserTrades getTradeHistory(TradeHistoryParams params) throws IOException {
     throw new NotYetImplementedForExchangeException("getTradeHistory");
+  }
+
+  default UserTrades getTradeHistory(TradeHistoryParams params, String apiKey, String secretKey)
+      throws IOException {
+    throw new NotYetImplementedForExchangeException();
   }
 
   default UserTrades getTradeHistory(TradeHistoryParams params, String apiKey, String secretKey)
