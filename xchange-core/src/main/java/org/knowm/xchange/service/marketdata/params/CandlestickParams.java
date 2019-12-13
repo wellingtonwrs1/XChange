@@ -1,17 +1,15 @@
 package org.knowm.xchange.service.marketdata.params;
 
-import org.knowm.xchange.dto.marketdata.Candlestick;
-
 import java.util.Date;
+import org.knowm.xchange.dto.marketdata.Candlestick;
 
 public interface CandlestickParams extends Params {
 
-    Candlestick.CandlestickInterval getInterval();
+  Candlestick.CandlestickInterval getInterval();
 
-    Integer getLimit();
+  Integer getLimit();
 
-    Date getStart();
+  Date getStart();
 
-    Date getEnd();
-
+  Date getEnd();
 }
