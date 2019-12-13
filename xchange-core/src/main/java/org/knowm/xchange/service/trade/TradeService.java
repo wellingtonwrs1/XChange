@@ -102,6 +102,11 @@ public interface TradeService extends BaseService {
     throw new NotYetImplementedForExchangeException();
   }
 
+  default String placeMarketOrder(MarketOrder marketOrder, String apiKey, String secretKey)
+          throws IOException {
+    throw new NotYetImplementedForExchangeException();
+  }
+
   /**
    * Place a limit order
    *

@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.List;
 import org.knowm.xchange.Exchange;
 import org.knowm.xchange.currency.CurrencyPair;
+import org.knowm.xchange.dto.marketdata.Candlestick;
 import org.knowm.xchange.dto.marketdata.OrderBook;
 import org.knowm.xchange.dto.marketdata.Ticker;
 import org.knowm.xchange.dto.marketdata.Trades;
@@ -11,6 +12,7 @@ import org.knowm.xchange.exceptions.ExchangeException;
 import org.knowm.xchange.exceptions.NotAvailableFromExchangeException;
 import org.knowm.xchange.exceptions.NotYetImplementedForExchangeException;
 import org.knowm.xchange.service.BaseService;
+import org.knowm.xchange.service.marketdata.params.CandlestickParams;
 import org.knowm.xchange.service.marketdata.params.Params;
 
 /**
@@ -124,4 +126,9 @@ public interface MarketDataService extends BaseService {
   default Trades getTrades(Params params) throws IOException {
     throw new NotYetImplementedForExchangeException("getTrades");
   }
+
+  default List<Candlestick> getCandlesticks(CurrencyPair currencyPair, CandlestickParams params) throws IOException {
+    throw new NotYetImplementedForExchangeException();
+  }
+
 }
