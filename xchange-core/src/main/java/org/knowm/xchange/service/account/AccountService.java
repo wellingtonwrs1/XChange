@@ -49,6 +49,10 @@ public interface AccountService extends BaseService {
     throw new NotYetImplementedForExchangeException("getAccountInfo");
   }
 
+  default AccountInfo getAccountInfo(String apiKey, String secretKey) throws IOException {
+    throw new NotYetImplementedForExchangeException();
+  }
+
   /**
    * Convenience method, typically just delegates to withdrawFunds(WithdrawFundsParams params)
    *
