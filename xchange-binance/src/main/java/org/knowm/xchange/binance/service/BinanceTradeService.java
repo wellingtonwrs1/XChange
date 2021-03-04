@@ -98,7 +98,13 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
 
   @Override
   public String placeMarketOrder(MarketOrder mo) throws IOException {
-    return placeOrder(OrderType.MARKET, mo, null, null, null);
+    return placeOrder(OrderType.MARKET, mo, null, null, null, null, null);
+  }
+
+  @Override
+  public String placeMarketOrder(MarketOrder marketOrder, String apiKey, String secretKey)
+      throws IOException {
+    return placeOrder(OrderType.MARKET, marketOrder, null, null, null, apiKey, secretKey);
   }
 
   @Override
@@ -111,7 +117,7 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
     } else {
       type = OrderType.LIMIT;
     }
-    return placeOrder(type, limitOrder, limitOrder.getLimitPrice(), null, tif);
+    return placeOrder(type, limitOrder, limitOrder.getLimitPrice(), null, tif, null, null);
   }
 
   @Override
@@ -125,7 +131,8 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
 
     OrderType orderType = BinanceAdapters.adaptOrderType(order);
 
-    return placeOrder(orderType, order, order.getLimitPrice(), order.getStopPrice(), tif);
+    return placeOrder(
+        orderType, order, order.getLimitPrice(), order.getStopPrice(), tif, null, null);
   }
 
   private Optional<TimeInForce> timeInForceFromOrder(Order order) {
@@ -136,12 +143,15 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
   }
 
   private String placeOrder(
-      OrderType type, Order order, BigDecimal limitPrice, BigDecimal stopPrice, TimeInForce tif)
+      OrderType type,
+      Order order,
+      BigDecimal limitPrice,
+      BigDecimal stopPrice,
+      TimeInForce tif,
+      String apiKey,
+      String secretKey)
       throws IOException {
     try {
-      Long recvWindow =
-          (Long)
-              exchange.getExchangeSpecification().getExchangeSpecificParametersItem("recvWindow");
       BinanceNewOrder newOrder =
           newOrder(
               order.getCurrencyPair(),
@@ -152,7 +162,9 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
               limitPrice,
               getClientOrderId(order),
               stopPrice,
-              null);
+              null,
+              apiKey,
+              secretKey);
       return Long.toString(newOrder.orderId);
     } catch (BinanceException e) {
       throw BinanceErrorAdapter.adapt(e);
@@ -223,6 +235,12 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
 
   @Override
   public UserTrades getTradeHistory(TradeHistoryParams params) throws IOException {
+    return this.getTradeHistory(params, null, null);
+  }
+
+  @Override
+  public UserTrades getTradeHistory(TradeHistoryParams params, String apiKey, String secretKey)
+      throws IOException {
     try {
       Assert.isTrue(
           params instanceof TradeHistoryParamCurrencyPair,
@@ -262,7 +280,8 @@ public class BinanceTradeService extends BinanceTradeServiceRaw implements Trade
       if ((fromId != null) && (startTime != null || endTime != null))
         throw new ExchangeException(
             "You should either specify the id from which you get the user trades from or start and end times. If you specify both, Binance will only honour the fromId parameter.");
-      List<BinanceTrade> binanceTrades = super.myTrades(pair, limit, startTime, endTime, fromId);
+      List<BinanceTrade> binanceTrades =
+          super.myTrades(pair, limit, startTime, endTime, fromId, apiKey, secretKey);
       List<UserTrade> trades =
           binanceTrades.stream()
               .map(

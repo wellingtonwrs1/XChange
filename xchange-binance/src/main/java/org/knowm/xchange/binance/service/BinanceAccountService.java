@@ -73,8 +73,13 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
 
   @Override
   public AccountInfo getAccountInfo() throws IOException {
+    return this.getAccountInfo(null, null);
+  }
+
+  @Override
+  public AccountInfo getAccountInfo(String apiKey, String secretKey) throws IOException {
     try {
-      BinanceAccountInformation acc = account();
+      BinanceAccountInformation acc = account(apiKey, secretKey);
       List<Balance> balances =
           acc.balances.stream()
               .map(b -> new Balance(b.getCurrency(), b.getTotal(), b.getAvailable()))
@@ -88,7 +93,7 @@ public class BinanceAccountService extends BinanceAccountServiceRaw implements A
   @Override
   public Map<CurrencyPair, Fee> getDynamicTradingFees() throws IOException {
     try {
-      BinanceAccountInformation acc = account();
+      BinanceAccountInformation acc = account(null, null);
       BigDecimal makerFee =
           acc.makerCommission.divide(new BigDecimal("10000"), 4, RoundingMode.UNNECESSARY);
       BigDecimal takerFee =

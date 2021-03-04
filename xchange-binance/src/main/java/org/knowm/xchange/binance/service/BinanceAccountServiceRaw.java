@@ -25,9 +25,17 @@ public class BinanceAccountServiceRaw extends BinanceBaseService {
     super(exchange, binance, resilienceRegistries);
   }
 
-  public BinanceAccountInformation account() throws BinanceException, IOException {
+  public BinanceAccountInformation account(String apiKey, String secretKey)
+      throws BinanceException, IOException {
     return decorateApiCall(
-            () -> binance.account(getRecvWindow(), getTimestampFactory(), apiKey, signatureCreator))
+            () ->
+                binance.account(
+                    getRecvWindow(),
+                    getTimestampFactory(),
+                    apiKey != null ? apiKey : super.apiKey,
+                    secretKey != null
+                        ? BinanceHmacDigest.createInstance(secretKey)
+                        : super.signatureCreator))
         .withRetry(retry("account"))
         .withRateLimiter(rateLimiter(REQUEST_WEIGHT_RATE_LIMITER), 5)
         .call();
