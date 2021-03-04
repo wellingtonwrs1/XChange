@@ -1,12 +1,10 @@
 package info.bitrich.xchangestream.core;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import org.knowm.xchange.currency.Currency;
 import org.knowm.xchange.currency.CurrencyPair;
+import org.knowm.xchange.dto.marketdata.Candlestick;
+
+import java.util.*;
 
 /**
  * Use to specify subscriptions during the connect phase For instancing, use builder @link {@link
@@ -19,6 +17,7 @@ public class ProductSubscription {
   private final List<CurrencyPair> userTrades;
   private final List<CurrencyPair> orders;
   private final List<Currency> balances;
+  private final Map<CurrencyPair, Map<Candlestick.CandlestickInterval, Candlestick.CandlestickInterval>> candlestick;
 
   private ProductSubscription(ProductSubscriptionBuilder builder) {
     this.orderBook = asList(builder.orderBook);
@@ -27,6 +26,7 @@ public class ProductSubscription {
     this.orders = asList(builder.orders);
     this.userTrades = asList(builder.userTrades);
     this.balances = asList(builder.balances);
+    this.candlestick = builder.candlestick;
   }
 
   private <T> List<T> asList(Iterable<T> collection) {
@@ -55,6 +55,10 @@ public class ProductSubscription {
     return userTrades;
   }
 
+  public Map<CurrencyPair, Map<Candlestick.CandlestickInterval, Candlestick.CandlestickInterval>> getCandlestick() {
+    return candlestick;
+  }
+
   public List<Currency> getBalances() {
     return balances;
   }
@@ -68,7 +72,7 @@ public class ProductSubscription {
   }
 
   public boolean hasUnauthenticated() {
-    return !ticker.isEmpty() || !trades.isEmpty() || !orderBook.isEmpty();
+    return !ticker.isEmpty() || !trades.isEmpty() || !orderBook.isEmpty() || !candlestick.isEmpty();
   }
 
   public static ProductSubscriptionBuilder create() {
@@ -82,6 +86,7 @@ public class ProductSubscription {
     private final Set<CurrencyPair> userTrades;
     private final Set<CurrencyPair> orders;
     private final Set<Currency> balances;
+    private final Map<CurrencyPair, Map<Candlestick.CandlestickInterval, Candlestick.CandlestickInterval>> candlestick;
 
     private ProductSubscriptionBuilder() {
       orderBook = new HashSet<>();
@@ -90,6 +95,7 @@ public class ProductSubscription {
       orders = new HashSet<>();
       userTrades = new HashSet<>();
       balances = new HashSet<>();
+      candlestick = new HashMap<>();
     }
 
     public ProductSubscriptionBuilder addOrderbook(CurrencyPair pair) {
@@ -119,6 +125,14 @@ public class ProductSubscription {
 
     public ProductSubscriptionBuilder addBalances(Currency pair) {
       balances.add(pair);
+      return this;
+    }
+
+    public ProductSubscriptionBuilder addCandlestick(CurrencyPair pair, Candlestick.CandlestickInterval interval) {
+      if (!candlestick.containsKey(pair)) {
+        candlestick.put(pair, new HashMap<>());
+      }
+      candlestick.get(pair).put(interval, interval);
       return this;
     }
 

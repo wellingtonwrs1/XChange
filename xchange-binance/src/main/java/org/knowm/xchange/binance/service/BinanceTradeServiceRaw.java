@@ -1,33 +1,27 @@
 package org.knowm.xchange.binance.service;
 
-import static org.knowm.xchange.binance.BinanceResilience.*;
-import static org.knowm.xchange.client.ResilienceRegistries.NON_IDEMPOTENT_CALLS_RETRY_CONFIG_NAME;
+import org.knowm.xchange.binance.BinanceAdapters;
+import org.knowm.xchange.binance.BinanceAuthenticated;
+import org.knowm.xchange.binance.BinanceExchange;
+import org.knowm.xchange.binance.dto.BinanceException;
+import org.knowm.xchange.binance.dto.trade.*;
+import org.knowm.xchange.client.ResilienceRegistries;
+import org.knowm.xchange.currency.CurrencyPair;
 
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
-import org.knowm.xchange.binance.BinanceAdapters;
-import org.knowm.xchange.binance.BinanceAuthenticated;
-import org.knowm.xchange.binance.BinanceExchange;
-import org.knowm.xchange.binance.dto.BinanceException;
-import org.knowm.xchange.binance.dto.trade.BinanceCancelledOrder;
-import org.knowm.xchange.binance.dto.trade.BinanceListenKey;
-import org.knowm.xchange.binance.dto.trade.BinanceNewOrder;
-import org.knowm.xchange.binance.dto.trade.BinanceOrder;
-import org.knowm.xchange.binance.dto.trade.BinanceTrade;
-import org.knowm.xchange.binance.dto.trade.OrderSide;
-import org.knowm.xchange.binance.dto.trade.OrderType;
-import org.knowm.xchange.binance.dto.trade.TimeInForce;
-import org.knowm.xchange.client.ResilienceRegistries;
-import org.knowm.xchange.currency.CurrencyPair;
+
+import static org.knowm.xchange.binance.BinanceResilience.*;
+import static org.knowm.xchange.client.ResilienceRegistries.NON_IDEMPOTENT_CALLS_RETRY_CONFIG_NAME;
 
 public class BinanceTradeServiceRaw extends BinanceBaseService {
 
   protected BinanceTradeServiceRaw(
-      BinanceExchange exchange,
-      BinanceAuthenticated binance,
-      ResilienceRegistries resilienceRegistries) {
+          BinanceExchange exchange,
+          BinanceAuthenticated binance,
+          ResilienceRegistries resilienceRegistries) {
     super(exchange, binance, resilienceRegistries);
   }
 
@@ -50,32 +44,36 @@ public class BinanceTradeServiceRaw extends BinanceBaseService {
   }
 
   public BinanceNewOrder newOrder(
-      CurrencyPair pair,
-      OrderSide side,
-      OrderType type,
-      TimeInForce timeInForce,
-      BigDecimal quantity,
-      BigDecimal price,
-      String newClientOrderId,
-      BigDecimal stopPrice,
-      BigDecimal icebergQty)
+          CurrencyPair pair,
+          OrderSide side,
+          OrderType type,
+          TimeInForce timeInForce,
+          BigDecimal quantity,
+          BigDecimal price,
+          String newClientOrderId,
+          BigDecimal stopPrice,
+          BigDecimal icebergQty,
+          String apiKey,
+          String secretKey)
       throws IOException, BinanceException {
     return decorateApiCall(
             () ->
-                binance.newOrder(
-                    BinanceAdapters.toSymbol(pair),
-                    side,
-                    type,
-                    timeInForce,
-                    quantity,
-                    price,
-                    newClientOrderId,
-                    stopPrice,
-                    icebergQty,
-                    getRecvWindow(),
-                    getTimestampFactory(),
-                    apiKey,
-                    signatureCreator))
+                    binance.newOrder(
+                            BinanceAdapters.toSymbol(pair),
+                            side,
+                            type,
+                            timeInForce,
+                            quantity,
+                            price,
+                            newClientOrderId,
+                            stopPrice,
+                            icebergQty,
+                            getRecvWindow(),
+                            getTimestampFactory(),
+                            apiKey != null ? apiKey : super.apiKey,
+                            secretKey != null
+                                    ? BinanceHmacDigest.createInstance(secretKey)
+                                    : super.signatureCreator))
         .withRetry(retry("newOrder", NON_IDEMPOTENT_CALLS_RETRY_CONFIG_NAME))
         .withRateLimiter(rateLimiter(ORDERS_PER_SECOND_RATE_LIMITER))
         .withRateLimiter(rateLimiter(ORDERS_PER_DAY_RATE_LIMITER))
@@ -184,20 +182,22 @@ public class BinanceTradeServiceRaw extends BinanceBaseService {
   }
 
   public List<BinanceTrade> myTrades(
-      CurrencyPair pair, Integer limit, Long startTime, Long endTime, Long fromId)
+          CurrencyPair pair, Integer limit, Long startTime, Long endTime, Long fromId, String apiKey, String secretKey)
       throws BinanceException, IOException {
     return decorateApiCall(
             () ->
-                binance.myTrades(
-                    BinanceAdapters.toSymbol(pair),
-                    limit,
-                    startTime,
-                    endTime,
-                    fromId,
-                    getRecvWindow(),
-                    getTimestampFactory(),
-                    apiKey,
-                    signatureCreator))
+                    binance.myTrades(
+                            BinanceAdapters.toSymbol(pair),
+                            limit,
+                            startTime,
+                            endTime,
+                            fromId,
+                            getRecvWindow(),
+                            getTimestampFactory(),
+                            apiKey != null ? apiKey : super.apiKey,
+                            secretKey != null
+                                    ? BinanceHmacDigest.createInstance(secretKey)
+                                    : super.signatureCreator))
         .withRetry(retry("myTrades"))
         .withRateLimiter(rateLimiter(REQUEST_WEIGHT_RATE_LIMITER), myTradesPermits(limit))
         .call();

@@ -8,17 +8,20 @@ import info.bitrich.xchangestream.service.netty.ConnectionStateModel.State;
 import info.bitrich.xchangestream.util.Events;
 import io.reactivex.Completable;
 import io.reactivex.Observable;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 import org.knowm.xchange.binance.BinanceAuthenticated;
 import org.knowm.xchange.binance.BinanceExchange;
 import org.knowm.xchange.binance.service.BinanceMarketDataService;
 import org.knowm.xchange.client.ExchangeRestProxyBuilder;
 import org.knowm.xchange.currency.CurrencyPair;
+import org.knowm.xchange.dto.marketdata.Candlestick;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class BinanceStreamingExchange extends BinanceExchange implements StreamingExchange {
 
@@ -145,8 +148,10 @@ public class BinanceStreamingExchange extends BinanceExchange implements Streami
   @Override
   public Completable disconnect() {
     List<Completable> completables = new ArrayList<>();
-    completables.add(streamingService.disconnect());
-    streamingService = null;
+    if (streamingService != null) {
+      completables.add(streamingService.disconnect());
+      streamingService = null;
+    }
     if (userDataStreamingService != null) {
       completables.add(userDataStreamingService.disconnect());
       userDataStreamingService = null;
@@ -202,8 +207,9 @@ public class BinanceStreamingExchange extends BinanceExchange implements Streami
   public String buildSubscriptionStreams(ProductSubscription subscription) {
     return Stream.of(
             buildSubscriptionStrings(subscription.getTicker(), BinanceSubscriptionType.TICKER.getType()),
-            buildSubscriptionStrings(subscription.getOrderBook(),  BinanceSubscriptionType.DEPTH.getType()),
-            buildSubscriptionStrings(subscription.getTrades(), BinanceSubscriptionType.TRADE.getType()))
+            buildSubscriptionStrings(subscription.getOrderBook(), BinanceSubscriptionType.DEPTH.getType()),
+            buildSubscriptionStrings(subscription.getTrades(), BinanceSubscriptionType.TRADE.getType()),
+            buildSubscriptionStrings(subscription.getCandlestick()))
         .filter(s -> !s.isEmpty())
         .collect(Collectors.joining("/"));
   }
@@ -212,18 +218,24 @@ public class BinanceStreamingExchange extends BinanceExchange implements Streami
       List<CurrencyPair> currencyPairs, String subscriptionType) {
     if (BinanceSubscriptionType.DEPTH.getType().equals(subscriptionType)) {
       return subscriptionStrings(currencyPairs)
-          .map(s -> s + "@" + subscriptionType + orderBookUpdateFrequencyParameter)
-          .collect(Collectors.joining("/"));
+              .map(s -> s + "@" + subscriptionType + orderBookUpdateFrequencyParameter)
+              .collect(Collectors.joining("/"));
     } else {
       return subscriptionStrings(currencyPairs)
-          .map(s -> s + "@" + subscriptionType)
-          .collect(Collectors.joining("/"));
+              .map(s -> s + "@" + subscriptionType)
+              .collect(Collectors.joining("/"));
     }
+  }
+
+  private static String buildSubscriptionStrings(Map<CurrencyPair, Map<Candlestick.CandlestickInterval, Candlestick.CandlestickInterval>> currencyPairs) {
+    return currencyPairs.entrySet().stream().flatMap(entry ->
+            entry.getValue().keySet().stream().map(candlestickInterval -> String.format("%s@%s_%s", String.join("", entry.getKey().toString().split("/")).toLowerCase(), "kline", candlestickInterval.getCode()))
+    ).collect(Collectors.joining("/"));
   }
 
   private static Stream<String> subscriptionStrings(List<CurrencyPair> currencyPairs) {
     return currencyPairs.stream()
-        .map(pair -> String.join("", pair.toString().split("/")).toLowerCase());
+            .map(pair -> String.join("", pair.toString().split("/")).toLowerCase());
   }
 
   @Override

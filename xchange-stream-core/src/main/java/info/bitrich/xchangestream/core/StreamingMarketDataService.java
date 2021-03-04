@@ -2,9 +2,11 @@ package info.bitrich.xchangestream.core;
 
 import io.reactivex.Observable;
 import org.knowm.xchange.currency.CurrencyPair;
+import org.knowm.xchange.dto.marketdata.Candlestick;
 import org.knowm.xchange.dto.marketdata.OrderBook;
 import org.knowm.xchange.dto.marketdata.Ticker;
 import org.knowm.xchange.dto.marketdata.Trade;
+import org.knowm.xchange.exceptions.NotYetImplementedForExchangeException;
 
 public interface StreamingMarketDataService {
   /**
@@ -46,4 +48,17 @@ public interface StreamingMarketDataService {
    * @return {@link Observable} that emits {@link Trade} when exchange sends the update.
    */
   Observable<Trade> getTrades(CurrencyPair currencyPair, Object... args);
+
+  /**
+   * Get the candlesticks performed by the exchange.
+   * Emits {@link info.bitrich.xchangestream.service.exception.NotConnectedException} When not connected to the WebSocket API.
+   *
+   * @param currencyPair Currency pair of the candlesticks
+   * @param interval     CandlestickInterval of the candlesticks
+   * @return {@link Observable} that emits {@link Candlestick} when exchange sends the update.
+   */
+  default Observable<Candlestick> getCandlesticks(CurrencyPair currencyPair, Candlestick.CandlestickInterval interval) {
+    throw new NotYetImplementedForExchangeException();
+  }
+
 }

@@ -1,38 +1,35 @@
 package org.knowm.xchange.binance.service;
 
-import java.io.IOException;
-import java.util.List;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import org.knowm.xchange.binance.BinanceAdapters;
 import org.knowm.xchange.binance.BinanceAuthenticated;
 import org.knowm.xchange.binance.BinanceErrorAdapter;
 import org.knowm.xchange.binance.BinanceExchange;
 import org.knowm.xchange.binance.dto.BinanceException;
-import org.knowm.xchange.binance.dto.marketdata.BinanceAggTrades;
-import org.knowm.xchange.binance.dto.marketdata.BinanceOrderbook;
-import org.knowm.xchange.binance.dto.marketdata.BinancePriceQuantity;
-import org.knowm.xchange.binance.dto.marketdata.BinanceTicker24h;
+import org.knowm.xchange.binance.dto.marketdata.*;
 import org.knowm.xchange.client.ResilienceRegistries;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.Order.OrderType;
-import org.knowm.xchange.dto.marketdata.OrderBook;
-import org.knowm.xchange.dto.marketdata.Ticker;
-import org.knowm.xchange.dto.marketdata.Trade;
-import org.knowm.xchange.dto.marketdata.Trades;
+import org.knowm.xchange.dto.marketdata.*;
 import org.knowm.xchange.dto.marketdata.Trades.TradeSortType;
 import org.knowm.xchange.dto.trade.LimitOrder;
 import org.knowm.xchange.exceptions.ExchangeException;
 import org.knowm.xchange.service.marketdata.MarketDataService;
+import org.knowm.xchange.service.marketdata.params.CandlestickParams;
 import org.knowm.xchange.service.marketdata.params.Params;
 
+import java.io.IOException;
+import java.util.Date;
+import java.util.List;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 public class BinanceMarketDataService extends BinanceMarketDataServiceRaw
-    implements MarketDataService {
+        implements MarketDataService {
 
   public BinanceMarketDataService(
-      BinanceExchange exchange,
-      BinanceAuthenticated binance,
-      ResilienceRegistries resilienceRegistries) {
+          BinanceExchange exchange,
+          BinanceAuthenticated binance,
+          ResilienceRegistries resilienceRegistries) {
     super(exchange, binance, resilienceRegistries);
   }
 
@@ -140,12 +137,34 @@ public class BinanceMarketDataService extends BinanceMarketDataServiceRaw
       return converter.apply(argStr);
     } catch (NumberFormatException e) {
       throw new IllegalArgumentException(
-          "Argument on index " + index + " is not a number: " + argStr, e);
+              "Argument on index " + index + " is not a number: " + argStr, e);
     }
   }
 
   public List<Ticker> getAllBookTickers() throws IOException {
     List<BinancePriceQuantity> binanceTickers = tickerAllBookTickers();
     return BinanceAdapters.adaptPriceQuantities(binanceTickers);
+  }
+
+  @Override
+  public List<Candlestick> getCandlesticks(CurrencyPair currencyPair, CandlestickParams params) throws IOException {
+    return this.klines(currencyPair,
+            KlineInterval.getByCode(params.getInterval().getCode()),
+            params.getLimit() != null ? params.getLimit() : null,
+            params.getStart() != null ? params.getStart().getTime() : null,
+            params.getEnd() != null ? params.getEnd().getTime() : null)
+            .stream()
+            .map(k -> new Candlestick.Builder()
+                    .currencyPair(currencyPair)
+                    .interval(params.getInterval())
+                    .openTime(new Date(k.getOpenTime()))
+                    .open(k.getOpenPrice())
+                    .high(k.getHighPrice())
+                    .low(k.getLowPrice())
+                    .close(k.getClosePrice())
+                    .volume(k.getVolume())
+                    .closeTime(new Date(k.getCloseTime()))
+                    .build())
+            .collect(Collectors.toList());
   }
 }

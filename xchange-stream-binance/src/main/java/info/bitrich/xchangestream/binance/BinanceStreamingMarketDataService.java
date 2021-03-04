@@ -20,10 +20,7 @@ import org.knowm.xchange.binance.dto.marketdata.BinanceTicker24h;
 import org.knowm.xchange.binance.service.BinanceMarketDataService;
 import org.knowm.xchange.currency.CurrencyPair;
 import org.knowm.xchange.dto.Order.OrderType;
-import org.knowm.xchange.dto.marketdata.OrderBook;
-import org.knowm.xchange.dto.marketdata.OrderBookUpdate;
-import org.knowm.xchange.dto.marketdata.Ticker;
-import org.knowm.xchange.dto.marketdata.Trade;
+import org.knowm.xchange.dto.marketdata.*;
 import org.knowm.xchange.exceptions.ExchangeException;
 import org.knowm.xchange.exceptions.RateLimitExceededException;
 import org.slf4j.Logger;
@@ -31,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -47,6 +45,7 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
   private static final JavaType TICKER_TYPE = getTickerType();
   private static final JavaType TRADE_TYPE = getTradeType();
   private static final JavaType DEPTH_TYPE = getDepthType();
+  private static final JavaType CANDLESTICK_TYPE = getCandlestickType();
 
   private final BinanceStreamingService service;
   private final String orderBookUpdateFrequencyParameter;
@@ -55,21 +54,22 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
   private final Map<CurrencyPair, Observable<OrderBook>> orderbookSubscriptions;
   private final Map<CurrencyPair, Observable<BinanceRawTrade>> tradeSubscriptions;
   private final Map<CurrencyPair, Observable<OrderBookUpdate>> orderBookUpdatesSubscriptions;
-  private final Map<CurrencyPair, Observable<DepthBinanceWebSocketTransaction>>
-      orderBookRawUpdatesSubscriptions;
+  private final Map<CurrencyPair, Observable<DepthBinanceWebSocketTransaction>> orderBookRawUpdatesSubscriptions;
+  private final Map<CurrencyPair, Map<Candlestick.CandlestickInterval, Observable<BinanceRawCandlestick>>> candlestickSubscriptions;
 
   private final ObjectMapper mapper = StreamingObjectMapperHelper.getObjectMapper();
   private final BinanceMarketDataService marketDataService;
   private final Runnable onApiCall;
 
   private final AtomicBoolean fallenBack = new AtomicBoolean();
-  private final AtomicReference<Runnable> fallbackOnApiCall = new AtomicReference<>(() -> {});
+  private final AtomicReference<Runnable> fallbackOnApiCall = new AtomicReference<>(() -> {
+  });
 
   public BinanceStreamingMarketDataService(
-      BinanceStreamingService service,
-      BinanceMarketDataService marketDataService,
-      Runnable onApiCall,
-      final String orderBookUpdateFrequencyParameter) {
+          BinanceStreamingService service,
+          BinanceMarketDataService marketDataService,
+          Runnable onApiCall,
+          final String orderBookUpdateFrequencyParameter) {
     this.service = service;
     this.orderBookUpdateFrequencyParameter = orderBookUpdateFrequencyParameter;
     this.marketDataService = marketDataService;
@@ -79,6 +79,7 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
     this.tradeSubscriptions = new ConcurrentHashMap<>();
     this.orderBookUpdatesSubscriptions = new ConcurrentHashMap<>();
     this.orderBookRawUpdatesSubscriptions = new ConcurrentHashMap<>();
+    this.candlestickSubscriptions = new ConcurrentHashMap<>();
   }
 
   @Override
@@ -138,24 +139,48 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
   public Observable<Trade> getTrades(CurrencyPair currencyPair, Object... args) {
     return getRawTrades(currencyPair, args)
         .map(
-            rawTrade ->
-                new Trade.Builder()
-                    .type(BinanceAdapters.convertType(rawTrade.isBuyerMarketMaker()))
-                    .originalAmount(rawTrade.getQuantity())
-                    .instrument(currencyPair)
-                    .price(rawTrade.getPrice())
-                    .timestamp(new Date(rawTrade.getTimestamp()))
-                    .id(String.valueOf(rawTrade.getTradeId()))
+                rawTrade ->
+                        new Trade.Builder()
+                                .type(BinanceAdapters.convertType(rawTrade.isBuyerMarketMaker()))
+                                .originalAmount(rawTrade.getQuantity())
+                                .instrument(currencyPair)
+                                .price(rawTrade.getPrice())
+                                .timestamp(new Date(rawTrade.getTimestamp()))
+                                .id(String.valueOf(rawTrade.getTradeId()))
+                                .build());
+  }
+
+  @Override
+  public Observable<Candlestick> getCandlesticks(CurrencyPair currencyPair, Candlestick.CandlestickInterval interval) {
+    return getRawCandlesticks(currencyPair, interval).map(k ->
+            new Candlestick.Builder()
+                    .currencyPair(k.getCurrencyPair())
+                    .interval(k.getInterval())
+                    .openTime(k.getOpenTime())
+                    .open(k.getOpen())
+                    .high(k.getHigh())
+                    .low(k.getLow())
+                    .close(k.getClose())
+                    .volume(k.getVolume())
+                    .closeTime(k.getCloseTime())
                     .build());
+  }
+
+  public Observable<BinanceRawCandlestick> getRawCandlesticks(CurrencyPair currencyPair, Candlestick.CandlestickInterval interval) {
+    if (!service.getProductSubscription().getCandlestick().containsKey(currencyPair)
+            && !service.getProductSubscription().getCandlestick().get(currencyPair).containsKey(interval)) {
+      throw new UnsupportedOperationException("Binance exchange only supports up front subscriptions - subscribe at connect time");
+    }
+    return candlestickSubscriptions.get(currencyPair).get(interval);
   }
 
   private Observable<OrderBookUpdate> createOrderBookUpdatesObservable(CurrencyPair currencyPair) {
     return orderBookRawUpdatesSubscriptions
-        .get(currencyPair)
-        .flatMap(
-            depthTransaction ->
-                observableFromStream(extractOrderBookUpdates(currencyPair, depthTransaction)))
-        .share();
+            .get(currencyPair)
+            .flatMap(
+                    depthTransaction ->
+                            observableFromStream(extractOrderBookUpdates(currencyPair, depthTransaction)))
+            .share();
   }
 
   private String channelFromCurrency(CurrencyPair currencyPair, String subscriptionType) {
@@ -169,6 +194,11 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
     }
   }
 
+  private static String channelFromCurrencyAndInterval(CurrencyPair currencyPair, Candlestick.CandlestickInterval interval, String subscriptionType) {
+    String currency = String.join("", currencyPair.toString().split("/")).toLowerCase();
+    return String.format("%s@%s_%s", currency, subscriptionType, interval.getCode());
+  }
+
   /**
    * Registers subsriptions with the streaming service for the given products.
    *
@@ -179,6 +209,7 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
     productSubscription.getTicker().forEach(this::initTickerSubscription);
     productSubscription.getOrderBook().forEach(this::initRawOrderBookUpdatesSubscription);
     productSubscription.getTrades().forEach(this::initTradeSubscription);
+    productSubscription.getCandlestick().forEach(this::initCandlestickSubscription);
   }
 
   /**
@@ -215,6 +246,13 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
   private void initTradeSubscription(CurrencyPair currencyPair) {
     tradeSubscriptions.put(
         currencyPair, triggerObservableBody(rawTradeStream(currencyPair)).share());
+  }
+
+  private void initCandlestickSubscription(CurrencyPair key, Map<Candlestick.CandlestickInterval, Candlestick.CandlestickInterval> value) {
+    if (!candlestickSubscriptions.containsKey(key)) {
+      candlestickSubscriptions.put(key, new HashMap<>());
+    }
+    value.forEach((key1, value1) -> candlestickSubscriptions.get(key).put(key1, triggerObservableBody(rawCandlestickStream(key, key1).share())));
   }
 
   private void initTickerSubscription(CurrencyPair currencyPair) {
@@ -386,6 +424,13 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
         .map(transaction -> transaction.getData().getRawTrade());
   }
 
+  private Observable<BinanceRawCandlestick> rawCandlestickStream(CurrencyPair currencyPair, Candlestick.CandlestickInterval interval) {
+    return service.subscribeChannel(channelFromCurrencyAndInterval(currencyPair, interval, "kline"))
+            .map(this::candlestickTransaction)
+            .filter(transaction -> transaction.getData().getCurrencyPair().equals(currencyPair) && transaction.getData().getRawCandlestick().getInterval().equals(interval))
+            .map(transaction -> transaction.getData().getRawCandlestick());
+  }
+
   /**
    * Force observable to execute its body, this way we get `BinanceStreamingService` to register the
    * observables emitter ready for our message arrivals.
@@ -403,6 +448,14 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
     } catch (IOException e) {
       throw new ExchangeException(
           String.format("Unable to parse %s transaction", transactionType), e);
+    }
+  }
+
+  private BinanceWebsocketTransaction<CandlestickBinanceWebsocketTransaction> candlestickTransaction(JsonNode node) {
+    try {
+      return mapper.readValue(mapper.treeAsTokens(node), CANDLESTICK_TYPE);
+    } catch (IOException e) {
+      throw new ExchangeException("Unable to parse candlestick transaction", e);
     }
   }
 
@@ -454,15 +507,25 @@ public class BinanceStreamingMarketDataService implements StreamingMarketDataSer
 
   private static JavaType getTradeType() {
     return getObjectMapper()
-        .getTypeFactory()
-        .constructType(
-            new TypeReference<BinanceWebsocketTransaction<TradeBinanceWebsocketTransaction>>() {});
+            .getTypeFactory()
+            .constructType(
+                    new TypeReference<BinanceWebsocketTransaction<TradeBinanceWebsocketTransaction>>() {
+                    });
   }
 
   private static JavaType getDepthType() {
     return getObjectMapper()
-        .getTypeFactory()
-        .constructType(
-            new TypeReference<BinanceWebsocketTransaction<DepthBinanceWebSocketTransaction>>() {});
+            .getTypeFactory()
+            .constructType(
+                    new TypeReference<BinanceWebsocketTransaction<DepthBinanceWebSocketTransaction>>() {
+                    });
+  }
+
+  private static JavaType getCandlestickType() {
+    return getObjectMapper()
+            .getTypeFactory()
+            .constructType(
+                    new TypeReference<BinanceWebsocketTransaction<CandlestickBinanceWebsocketTransaction>>() {
+                    });
   }
 }

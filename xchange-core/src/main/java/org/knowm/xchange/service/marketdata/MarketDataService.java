@@ -131,14 +131,4 @@ public interface MarketDataService extends BaseService {
       throws IOException {
     throw new NotYetImplementedForExchangeException();
   }
-
-  default List<Candlestick> getCandlesticks(CurrencyPair currencyPair, CandlestickParams params)
-      throws IOException {
-    throw new NotYetImplementedForExchangeException();
-  }
-
-  default List<Candlestick> getCandlesticks(CurrencyPair currencyPair, CandlestickParams params)
-      throws IOException {
-    throw new NotYetImplementedForExchangeException();
-  }
 }
